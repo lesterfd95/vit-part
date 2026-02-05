@@ -1,0 +1,11 @@
+scripts/tolerances
+scripts/modulos
+scripts/read_error.py
+scripts/__pycache__
+scripts/confidence
+scripts/data
+scripts/goldens
+scripts/module_datasets
+scripts/resultados
+scripts/trained_models
+readme_spanish.md
