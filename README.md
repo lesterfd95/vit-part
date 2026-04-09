@@ -120,7 +120,7 @@ python3 model_subset.py --model base
 ```
 The execution loads the trained weights file from `/trained_models/vit_base_cifar10.pth` and extracts the data corresponding to the layers that make up the first attention module. It then saves this weight subset in the `trained_models` directory under the name `vit_base_part_att.pth`.
 
-### Step 2
+### Step 4
 
 Use `confidence.py` to separate the data based on classification confidence:
 
