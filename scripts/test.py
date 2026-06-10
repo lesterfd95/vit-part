@@ -10,7 +10,8 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model", type=str, help="model to test. Ej: tiny, small", required=True)
+    parser.add_argument("--model", type=str, help="model to test", choices=["tiny", "small", "base"], required=True)
+    parser.add_argument("--submodel", type=str, help="submodel to capture dataset", choices=["embedding", "attention", "transformer", "classifier", "full"] , required=True)
     parser.add_argument("--batch_size", type=int, default=100)
     
     args = parser.parse_args()
@@ -25,22 +26,68 @@ def main(args):
     print(f"batch_size {batch_size}\n")
 
     model = utility.build_model(f"{args.model}")
+
+    if args.submodel == "full":
+        print(f"Creating golden for full model\n")
+    else:
+        print(f"Creating dataset for {args.submodel} submodel\n")
     
-    # hooks
-    utility.print_module_list(model)
-
+    # lista de modulos del modelo
+    #utility.print_module_list(model)
+    
+    # listas para guardar tensores de entrada y salida
     # cada elemento sera un tensor correspondiente a una imagen (elemento del batch)
-    all_attn_inputs = [] 
-    all_attn_outputs = []
+    
+    all_submodel_inputs = []
+    all_submodel_outputs = []
 
-    # definir hooks
-    def attn_hook(module, input, output):
-        all_attn_inputs.append(input[0].detach().cpu().clone().contiguous())
-        all_attn_outputs.append(output.detach().cpu().clone().contiguous())
+    # definir hooks, seleccionar capas de la lista, enganchar hooks
+    handles = []
+    # embedding
+    if args.submodel == "embedding":
+        def emb_in_hook(submodel, input, output):
+            all_submodel_inputs.append(input[0].detach().cpu().clone().contiguous())
+        def emb_out_hook(submodel, input, output):
+            all_submodel_outputs.append(input[0].detach().cpu().clone().contiguous())
 
-    # enganchar hooks
-    attn_module = model.transformer.layers[0][0].fn # sacado de la lista al inspeccionar modulos
-    handle = attn_module.register_forward_hook(attn_hook)
+        emb_submodel_in = model.to_patch_embedding[0]
+        emb_submodel_out = model.dropout
+
+        handles.append(emb_submodel_in.register_forward_hook(emb_in_hook)) 
+        handles.append(emb_submodel_out.register_forward_hook(emb_out_hook))
+
+    # attention
+    elif args.submodel == "attention":
+        def attn_hook(submodel, input, output):
+            all_submodel_inputs.append(input[0].detach().cpu().clone().contiguous())
+            all_submodel_outputs.append(output.detach().cpu().clone().contiguous())
+
+        attn_submodel = model.transformer.layers[0][0].fn 
+
+        handles.append(attn_submodel.register_forward_hook(attn_hook))
+
+    # transformers
+    elif args.submodel == "transformer":
+        def tran_in_hook(submodel, input, output):
+            all_submodel_inputs.append(input[0].detach().cpu().clone().contiguous())
+        def tran_out_hook(submodel, input, output):
+            all_submodel_outputs.append(input[0].detach().cpu().clone().contiguous())
+
+        tran_submodel_in = model.transformer.layers[0][0]
+        tran_submodel_out = model.transformer.layers[1][0]
+
+        handles.append(tran_submodel_in.register_forward_hook(tran_in_hook))
+        handles.append(tran_submodel_out.register_forward_hook(tran_out_hook))
+
+    # classifier
+    elif args.submodel == "classifier":
+        def cla_hook(submodel, input, output):
+            all_submodel_inputs.append(input[0].detach().cpu().clone().contiguous())
+            all_submodel_outputs.append(output.detach().cpu().clone().contiguous())
+
+        cla_submodel = model.mlp_head
+
+        handles.append(cla_submodel.register_forward_hook(cla_hook))
 
     # dataloader
     testloader = utility.build_dataloader_validation(batch_size)
@@ -76,31 +123,38 @@ def main(args):
             total += labels.size(0)
             correct += preds.eq(labels).sum().item()
 
-            all_outputs.append(outputs)
+            if args.submodel == "full":
+                all_outputs.append(outputs)
 
     accuracy = 100.0 * correct / total
     print(f"Accuracy CIFAR-10: {accuracy:.2f}%")
 
     # eliminar hooks
-    handle.remove()
+    for h in handles:
+        h.remove()
 
     # lo siguiente hace que pase a ser un arreglo donde cada elemento 
     # es un tensor independiete del tamaño del batch
     # como si se hubiesen recolectado en inferencia de tamaño de batch = 1 
-    all_outputs = torch.cat(all_outputs, dim= 0)
-    print(f"Golden output shape: {all_outputs.shape}")
-    attn_inputs = torch.cat(all_attn_inputs, dim=0)
-    print(f"attn_inputs output shape: {attn_inputs.shape}")
-    attn_outputs = torch.cat(all_attn_outputs, dim=0)
-    print(f"attn_outputs output shape: {attn_outputs.shape}") 
+    
+    if args.submodel == "full":
+        all_outputs = torch.cat(all_outputs, dim= 0)
+        print(f"Golden output shape: {all_outputs.shape}")
 
-    utility.create_directory("./module_datasets")
-    print(f"Saving attention dataset in ./module_datasets/vit_{args.model}_attn_dataset.pt") 
-    torch.save({"inputs": attn_inputs,"targets": attn_outputs,},f"./module_datasets/vit_{args.model}_attn_dataset.pt")
+        utility.create_directory("./goldens")
+        print(f"Saving golden in ./goldens/golden_{args.model}.pt") 
+        torch.save(all_outputs,f"./goldens/golden_{args.model}.pt")
 
-    utility.create_directory("./goldens")
-    print(f"Saving golden in ./goldens/golden_{args.model}.pt") 
-    torch.save(all_outputs,f"./goldens/golden_{args.model}.pt")
+    else:
+        inputs = torch.cat(all_submodel_inputs, dim=0)
+        print(f"{args.submodel} inputs shape: {inputs.shape}")
+        outputs = torch.cat(all_submodel_outputs, dim=0)
+        print(f"{args.submodel} outputs shape: {outputs.shape}") 
+
+        utility.create_directory("./module_datasets")
+        print(f"Saving embedding dataset in ./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt") 
+        torch.save({"inputs": inputs,"targets": outputs,},f"./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt")
+    
 
 if __name__ == '__main__':
     

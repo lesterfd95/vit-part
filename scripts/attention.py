@@ -6,7 +6,8 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model", type=str, help="Model. Ej: tiny, small", required=True)
+    parser.add_argument("--model", type=str, help="model", choices=["tiny", "small", "base"], required=True)
+    parser.add_argument("--submodel", type=str, help="submodel", choices=["embedding", "attention", "transformer", "classifier"] , required=True)
     parser.add_argument("--dataset", type=str, help="Dataset path", required=True)
     parser.add_argument("--atol", type=float, help="Absolute tolerance.", default=1e-6)
     parser.add_argument("--rtol", type=float, help="Relative tolerance.", default=1e-5)
@@ -16,7 +17,7 @@ def parse_args():
     parser.set_defaults(inject=False)
 
     args = parser.parse_args()
-    print(f"Using a submodel from ViT-{args.model}")
+    print(f"Using submodel {args.submodel} from ViT-{args.model}")
     print(f"Attempting evaluation over the data in {args.dataset} with batch size {args.batch_size}")
     print(f"Errors Injected: {args.inject}")
     print(f"Error detection Absolute tolerance: {args.atol} and Relative tolerance: {args.rtol}")
@@ -49,38 +50,43 @@ print(f"device: {device}")
 
 batch_size = args.batch_size
 
-# Crear red con un modulo de atencion 
-model = utility.build_submodel(model_name=args.model, submodel_name="attention")
+# Crear sub modelo 
+model = utility.build_submodel(model_name=args.model, submodel_name=args.submodel)
 
 # Inspeccionar modulos
-for i, (name, module) in enumerate(model.named_modules()):
-    print(f"[{i:03d}] {name:40s} {module.__class__.__name__}")
+utility.print_module_list(model)
 
 # Prepare dataset
 print("Cargando datasets")
 data = torch.load(args.dataset)
 
-# introducir error
-if(args.inject):
-    data["targets"][150][34][13] = torch.tensor(12, dtype=torch.int32)
-    data["targets"][150][34][54] = torch.tensor(12, dtype=torch.int32)
-    data["targets"][200][5][5] = torch.tensor(torch.inf)
-    data["targets"][201][2][23] = torch.tensor(torch.nan)
-    data["targets"][300][34][13] = torch.tensor(12, dtype=torch.int32)
+# introducir error (cambiando valores de salida con los que se compara)
+if args.inject:
+    if args.submodel == "classifier":
+        data["targets"][123][0] = torch.tensor(-4.8128, dtype=torch.float32)
+        data["targets"][150][0] = torch.tensor(12, dtype=torch.float32)
+        data["targets"][200][1] = torch.tensor(torch.inf)
+        data["targets"][500][9] = torch.tensor(torch.nan)
+    else:
+        data["targets"][150][34][13] = torch.tensor(12, dtype=torch.float32)
+        data["targets"][150][34][54] = torch.tensor(12, dtype=torch.float32)
+        data["targets"][200][5][5] = torch.tensor(torch.inf)
+        data["targets"][201][2][23] = torch.tensor(torch.nan)
+        data["targets"][300][34][13] = torch.tensor(12, dtype=torch.float32)
 
 dataset = torch.utils.data.TensorDataset(data["inputs"], data["targets"])
 testloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
 # Cargar pesos
 print("Cargando pesos")
-checkpoint_path = f"./trained_models/vit_{args.model}_part_att.pth"
+checkpoint_path = f"./trained_models/vit_{args.model}_{args.submodel}.pth"
 
 checkpoint = torch.load(checkpoint_path, map_location=device)
 
-attn_state_dict = checkpoint["model_state_dict"]
+state_dict = checkpoint["model_state_dict"]
 
 missing, unexpected = model.load_state_dict(
-    attn_state_dict,
+    state_dict,
     strict=False
 )
 print("Missing keys:", missing)
@@ -112,7 +118,7 @@ if fault_log["index"]:
     fault_log["index"] = torch.cat(fault_log["index"], dim=0)
     fault_log["tensors"] = torch.cat(fault_log["tensors"], dim=0)
 
-print(f"error in output tensors:")
-for i in fault_log["index"]:
-    print(f"{i}")
+#print(f"error in output tensors:")
+#for i in fault_log["index"]:
+#    print(f"{i}")
 #torch.save(fault_log, "faulty_outputs.pt")

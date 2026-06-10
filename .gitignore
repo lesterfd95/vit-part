@@ -1,5 +1,6 @@
 scripts/tolerances
 scripts/modulos
+scripts/shapes
 scripts/read_error.py
 scripts/__pycache__
 scripts/confidence

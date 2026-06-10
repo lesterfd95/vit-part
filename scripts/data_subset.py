@@ -12,8 +12,9 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--model", type=str, help="Model. Ej: tiny, small", required=True)
-    parser.add_argument("--mode", type=str, help="Mode of division. 'range' for providing a range. 'conf' for using a confidence file and provide group sizes", required=True)
+    parser.add_argument("--model", type=str, help="model", choices=["tiny", "small", "base"], required=True)
+    parser.add_argument("--submodel", type=str, help="submodel", choices=["embedding", "attention", "transformer", "classifier"] , required=True)
+    parser.add_argument("--mode", type=str, help="Mode of division. 'range' for providing a range. 'conf' for using a confidence file and provide group sizes", choices=["range", "conf"], required=True)
     parser.add_argument("--range", type=int, nargs=2, help="Range for range mode of division. End value not included in range. Ex --range 0 512")
     parser.add_argument("--group_sizes", type=int, nargs='+' ,help="Group sizes for confidence mode. Ex --group_sizes 64 64 128 256")
     
@@ -23,8 +24,7 @@ def parse_args():
 args = parse_args()
 
 # --- CONFIGURACIÓN ---
-input_file = f"./module_datasets/vit_{args.model}_attn_dataset.pt" # Dataset original
-
+input_file = f"./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt" # Dataset original
 
 # --- CARGAR DATASET ORIGINAL ---
 data = torch.load(input_file)
@@ -34,54 +34,54 @@ inputs = data['inputs']
 targets = data['targets']
 
 # --- VERIFICAR DIMENSIONES ---
-print(inputs.shape)
-print(targets.shape)
 if len(inputs) != len(targets):
     raise ValueError("inputs y targets no tienen la misma cantidad de elementos")
 
 # --- CREAR SUBCONJUNTO ---
-if args.mode == "range":
-    # intervalo
+if args.mode == "range":  # intervalo
     start_idx, end_idx = args.range # Índice inicial (inclusive) Índice final (exclusive)
     output_file = f"./module_datasets/vit_{args.model}_attn_dataset_{start_idx}_{end_idx}.pt" # Nuevo dataset
     inputs_subset = inputs[start_idx:end_idx]
     targets_subset = targets[start_idx:end_idx]
 
 
-elif args.mode == "conf":
-    # elementos en posiciones especificas
-    group_sizes = args.group_sizes
-    group_number = len(group_sizes)
-    specific_index = torch.load(f"./confidence/{args.model}_cnf_corr_out_cat_{group_number}.pt")
-    output_file = f"./module_datasets/vit_{args.model}_attn_dataset_cnf_{group_number}.pt" # Nuevo dataset
+elif args.mode == "conf": # elementos en posiciones especificas
 
-    print("tamaños de grupos disponibles")
-    for i in range(len(specific_index)):
-        print(len(specific_index[i]))
+    specific_index = torch.load(f"./confidence/{args.model}_cnf_corr_out_cat_4.pt") # Archivo de indices por categorias de confianza 
+    output_file = f"./module_datasets/vit_{args.model}_{args.submodel}_dataset_cnf_4.pt" # Nuevo dataset
 
-    inputs_list = []
-    targets_list = []
-    for group_id, group_size in enumerate(group_sizes):
-        idxs = specific_index[group_id][:group_size]
+    if args.group_sizes == None:
+        print("tamaños de grupos disponibles")
+        for i in range(len(specific_index)):
+            print(len(specific_index[i]))
+        exit()
 
-        # convertir listas a tensor 
-        idxs = torch.as_tensor(idxs, dtype=torch.long)
+    else: 
+        group_sizes = args.group_sizes
 
-        inputs_list.append(inputs[idxs])
-        targets_list.append(targets[idxs])
+        inputs_list = []
+        targets_list = []
+        for group_id, group_size in enumerate(group_sizes):
+            idxs = specific_index[group_id][:group_size]
 
-    print("tamaños de grupos usados")
-    for i in range(len(inputs_list)):
-        print(len(inputs_list[i]))
+            # convertir listas a tensor 
+            idxs = torch.as_tensor(idxs, dtype=torch.long)
 
-    inputs_subset = torch.cat(inputs_list, dim=0)
-    targets_subset = torch.cat(targets_list, dim=0)
+            inputs_list.append(inputs[idxs])
+            targets_list.append(targets[idxs])
 
-    print("Subset size:", inputs_subset.shape[0])
-    print("Expected:", sum(group_sizes))
+        print("tamaños de grupos usados")
+        for i in range(len(inputs_list)):
+            print(len(inputs_list[i]))
 
-    assert inputs_subset.shape[0] == sum(group_sizes)
-    assert targets_subset.shape[0] == sum(group_sizes)
+        inputs_subset = torch.cat(inputs_list, dim=0)
+        targets_subset = torch.cat(targets_list, dim=0)
+
+        print("Subset size:", inputs_subset.shape[0])
+        print("Expected:", sum(group_sizes))
+
+        assert inputs_subset.shape[0] == sum(group_sizes)
+        assert targets_subset.shape[0] == sum(group_sizes)
 
 
 print(inputs_subset.shape)
@@ -101,5 +101,5 @@ elif args.mode == "conf":
     msg = f"Nuevo dataset guardado en '{output_file}' con {len(inputs_subset)} elementos, tamaños de grupo: {group_sizes}"
     print(msg)
     
-with open("./confidence/creation_log.log", "a") as f:
+with open("./module_datasets/creation_log.log", "a") as f:
     f.write(msg + "\n")

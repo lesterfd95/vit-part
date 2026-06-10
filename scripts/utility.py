@@ -3,6 +3,9 @@ import torchvision
 import torchvision.transforms as transforms 
 from vit import ViT
 from vit import Attention
+from vit import PatchEmbedding
+from vit import TransformerBlock
+from vit import ClassificationHead
 import os
 
 def build_model(model_name):
@@ -17,7 +20,7 @@ def build_model(model_name):
     #mlp_dim        dimension interna en el MLP de cada transformer encoder: 4 * dim
     #channels       numero de canales en las imagenes: 3 (estandar en imagenes)
     #dim_head       dimension interna de cada cabeza del transformer: 64 es estandar
-    #dropout        dropout luego del emmbeding
+    #dropout        dropout luego del embedding
     #emb_dropout    dropout de los MLP del transformer encoder
 
     # ViT-Tiny-16
@@ -68,9 +71,11 @@ def build_model(model_name):
             dropout = 0.1,      
             emb_dropout = 0.1   
         )
+    else: print(f"The required model name {model_name} does not match any avaliable model")
     return model
 
 def build_submodel(model_name, submodel_name):
+    # ViT-Tiny-16
     if model_name == "tiny":
         if submodel_name == "attention":
             submodel = Attention(
@@ -79,6 +84,27 @@ def build_submodel(model_name, submodel_name):
                 dim_head = 64, 
                 dropout = 0.1
             )
+        elif submodel_name == "embedding":
+            submodel = PatchEmbedding(
+                image_size = 224,   
+                patch_size = 16,    
+                dim = 192,  
+                channels = 3
+            )
+        elif submodel_name == "transformer":
+            submodel = TransformerBlock(
+                dim = 192,   
+                heads = 3,
+                dim_head = 64, 
+                mlp_dim = 768,   
+                dropout = 0.1
+            )
+        elif submodel_name == "classifier":
+            submodel = ClassificationHead(
+                dim = 192, 
+                num_classes = 10
+            )
+    # ViT-Small-16
     elif model_name == "small":
         if submodel_name == "attention":
             submodel = Attention(
@@ -87,6 +113,27 @@ def build_submodel(model_name, submodel_name):
                 dim_head = 64, 
                 dropout = 0.1
             )
+        elif submodel_name == "embedding":
+            submodel = PatchEmbedding(
+                image_size = 224,   
+                patch_size = 16,    
+                dim = 384,  
+                channels = 3
+            )
+        elif submodel_name == "transformer":
+            submodel = TransformerBlock(
+                dim = 384,      
+                heads = 6,
+                dim_head = 64, 
+                mlp_dim = 1536,   
+                dropout = 0.1
+            )
+        elif submodel_name == "classifier":
+            submodel = ClassificationHead(
+                dim = 384, 
+                num_classes = 10
+            )
+    # ViT-Base-16
     elif model_name == "base":
         if submodel_name == "attention":
             submodel = Attention(
@@ -95,6 +142,28 @@ def build_submodel(model_name, submodel_name):
                 dim_head = 64, 
                 dropout = 0.1
             )
+        elif submodel_name == "embedding":
+            submodel = PatchEmbedding(
+                image_size = 224,   
+                patch_size = 16,    
+                dim = 768,  
+                channels = 3
+            )
+        elif submodel_name == "transformer":
+            submodel = TransformerBlock(
+                dim = 768,      
+                heads = 12,
+                dim_head = 64, 
+                mlp_dim = 3072,   
+                dropout = 0.1
+            )
+        elif submodel_name == "classifier":
+            submodel = ClassificationHead(
+                dim = 768, 
+                num_classes = 10
+            )
+    
+    else: print(f"The required submodel name {submodel_name} does not match any avaliable submodel for the model {model_name}")
     return submodel
 
 def build_dataloader_train(batch_size):

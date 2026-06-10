@@ -67,6 +67,7 @@ def main(args):
     # load correct file
     data = torch.load(f"./confidence/{args.model}_cnf_corr_out.pt")
 
+    """
     # divide by confidence 5 
     divided_outputs = [[],[],[],[],[]]
     for i in range(len(data["index"])):
@@ -86,7 +87,8 @@ def main(args):
         print(len(divided_outputs[i]))
 
     torch.save(divided_outputs, f"./confidence/{args.model}_cnf_corr_out_cat_5.pt")
-
+    """
+    
     # divide by confidence 4
     divided_outputs = [[],[],[],[]]
     for i in range(len(data["index"])):
