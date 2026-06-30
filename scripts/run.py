@@ -7,11 +7,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--model", type=str, help="model", choices=["tiny", "small", "base"], required=True)
-    parser.add_argument("--submodel", type=str, help="submodel", choices=["embedding", "attention", "transformer", "classifier"] , required=True)
+    parser.add_argument("--submodel", type=str, help="submodel", choices=["embedding", "attention", "transformer", "classifier", "full"] , required=True)
     parser.add_argument("--dataset", type=str, help="Dataset path", required=True)
     parser.add_argument("--atol", type=float, help="Absolute tolerance.", default=1e-6)
     parser.add_argument("--rtol", type=float, help="Relative tolerance.", default=1e-5)
-    parser.add_argument("--batch_size", type=int, default=100)
+    parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--inject", action="store_true", help="Inject errors")
     parser.add_argument("--no-inject", dest="inject", action="store_false")
     parser.set_defaults(inject=False)
@@ -51,7 +51,10 @@ print(f"device: {device}")
 batch_size = args.batch_size
 
 # Crear sub modelo 
-model = utility.build_submodel(model_name=args.model, submodel_name=args.submodel)
+if args.submodel == "full":
+    model = utility.build_model(model_name=args.model)
+else:
+    model = utility.build_submodel(model_name=args.model, submodel_name=args.submodel)
 
 # Inspeccionar modulos
 utility.print_module_list(model)
@@ -62,7 +65,7 @@ data = torch.load(args.dataset)
 
 # introducir error (cambiando valores de salida con los que se compara)
 if args.inject:
-    if args.submodel == "classifier":
+    if args.submodel == "classifier" or args.submodel == "full":
         data["targets"][123][0] = torch.tensor(-4.8128, dtype=torch.float32)
         data["targets"][150][0] = torch.tensor(12, dtype=torch.float32)
         data["targets"][200][1] = torch.tensor(torch.inf)

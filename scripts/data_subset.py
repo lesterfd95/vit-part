@@ -13,7 +13,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--model", type=str, help="model", choices=["tiny", "small", "base"], required=True)
-    parser.add_argument("--submodel", type=str, help="submodel", choices=["embedding", "attention", "transformer", "classifier"] , required=True)
+    parser.add_argument("--submodel", type=str, help="submodel", choices=["embedding", "attention", "transformer", "classifier", "full"] , required=True)
     parser.add_argument("--mode", type=str, help="Mode of division. 'range' for providing a range. 'conf' for using a confidence file and provide group sizes", choices=["range", "conf"], required=True)
     parser.add_argument("--range", type=int, nargs=2, help="Range for range mode of division. End value not included in range. Ex --range 0 512")
     parser.add_argument("--group_sizes", type=int, nargs='+' ,help="Group sizes for confidence mode. Ex --group_sizes 64 64 128 256")

@@ -71,7 +71,7 @@ def build_model(model_name):
             dropout = 0.1,      
             emb_dropout = 0.1   
         )
-    else: print(f"The required model name {model_name} does not match any avaliable model")
+    else: print(f"ERROR: The required model name '{model_name}' does not match any avaliable model")
     return model
 
 def build_submodel(model_name, submodel_name):
@@ -104,6 +104,7 @@ def build_submodel(model_name, submodel_name):
                 dim = 192, 
                 num_classes = 10
             )
+        else: print(f"ERROR: The required submodel name '{submodel_name}' does not match any avaliable submodel for the model '{model_name}'")
     # ViT-Small-16
     elif model_name == "small":
         if submodel_name == "attention":
@@ -133,6 +134,7 @@ def build_submodel(model_name, submodel_name):
                 dim = 384, 
                 num_classes = 10
             )
+        else: print(f"ERROR: The required submodel name '{submodel_name}' does not match any avaliable submodel for the model '{model_name}'")
     # ViT-Base-16
     elif model_name == "base":
         if submodel_name == "attention":
@@ -162,8 +164,9 @@ def build_submodel(model_name, submodel_name):
                 dim = 768, 
                 num_classes = 10
             )
-    
-    else: print(f"The required submodel name {submodel_name} does not match any avaliable submodel for the model {model_name}")
+        else: print(f"ERROR: The required submodel name '{submodel_name}' does not match any avaliable submodel for the model '{model_name}'")
+
+    else: print(f"ERROR: The required model name '{model_name}' does not match any avaliable model")
     return submodel
 
 def build_dataloader_train(batch_size):

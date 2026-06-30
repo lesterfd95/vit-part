@@ -141,8 +141,8 @@ def main(args):
                 "scheduler_state_dict": scheduler.state_dict(),
             }
             utility.create_directory("./trained_models")
-            torch.save(checkpoint, f"./trained_models/vit_{args.model}_cifar10.pth")
-            print(f"Modelo guardado en ./trained_models/vit_{args.model}_cifar10.pth")
+            torch.save(checkpoint, f"./trained_models/vit_{args.model}_full.pth")
+            print(f"Modelo guardado en ./trained_models/vit_{args.model}_full.pth")
 
 if __name__ == '__main__':
     

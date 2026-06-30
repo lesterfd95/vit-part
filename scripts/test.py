@@ -11,7 +11,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--model", type=str, help="model to test", choices=["tiny", "small", "base"], required=True)
-    parser.add_argument("--submodel", type=str, help="submodel to capture dataset", choices=["embedding", "attention", "transformer", "classifier", "full"] , required=True)
+    parser.add_argument("--submodel", type=str, help="submodel to capture dataset", choices=["embedding", "attention", "transformer", "classifier", "full", "golden"] , required=True)
     parser.add_argument("--batch_size", type=int, default=100)
     
     args = parser.parse_args()
@@ -27,8 +27,8 @@ def main(args):
 
     model = utility.build_model(f"{args.model}")
 
-    if args.submodel == "full":
-        print(f"Creating golden for full model\n")
+    if args.submodel == "golden":
+        print(f"Creating golden of output logits for model\n")
     else:
         print(f"Creating dataset for {args.submodel} submodel\n")
     
@@ -94,7 +94,7 @@ def main(args):
 
     # Cargar pesos
     print("Loading weights")
-    checkpoint_path = f"./trained_models/vit_{args.model}_cifar10.pth"
+    checkpoint_path = f"./trained_models/vit_{args.model}_full.pth"
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
     missing, unexpected = model.load_state_dict(
@@ -111,6 +111,7 @@ def main(args):
     correct = 0
     total = 0
 
+    all_inputs = []
     all_outputs = []
     with torch.no_grad():
         for batch_idx, (images, labels) in enumerate(testloader):
@@ -124,6 +125,10 @@ def main(args):
             correct += preds.eq(labels).sum().item()
 
             if args.submodel == "full":
+                all_inputs.append(images)
+                all_outputs.append(outputs)
+
+            if args.submodel == "golden":
                 all_outputs.append(outputs)
 
     accuracy = 100.0 * correct / total
@@ -137,13 +142,23 @@ def main(args):
     # es un tensor independiete del tamaño del batch
     # como si se hubiesen recolectado en inferencia de tamaño de batch = 1 
     
-    if args.submodel == "full":
+    if args.submodel == "golden":
         all_outputs = torch.cat(all_outputs, dim= 0)
         print(f"Golden output shape: {all_outputs.shape}")
 
         utility.create_directory("./goldens")
         print(f"Saving golden in ./goldens/golden_{args.model}.pt") 
         torch.save(all_outputs,f"./goldens/golden_{args.model}.pt")
+
+    elif args.submodel == "full":
+        all_inputs = torch.cat(all_inputs, dim= 0)
+        print(f"{args.submodel} inputs shape: {all_inputs.shape}")
+        all_outputs = torch.cat(all_outputs, dim= 0)
+        print(f"{args.submodel} outputs shape: {all_outputs.shape}")
+
+        utility.create_directory("./module_datasets")
+        print(f"Saving {args.submodel} dataset in ./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt") 
+        torch.save({"inputs": all_inputs,"targets": all_outputs,},f"./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt")
 
     else:
         inputs = torch.cat(all_submodel_inputs, dim=0)
@@ -152,7 +167,7 @@ def main(args):
         print(f"{args.submodel} outputs shape: {outputs.shape}") 
 
         utility.create_directory("./module_datasets")
-        print(f"Saving embedding dataset in ./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt") 
+        print(f"Saving {args.submodel} dataset in ./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt") 
         torch.save({"inputs": inputs,"targets": outputs,},f"./module_datasets/vit_{args.model}_{args.submodel}_dataset.pt")
     
 
