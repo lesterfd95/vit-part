@@ -4,6 +4,7 @@ import torch.optim as optim
 import time
 import argparse
 import utility
+import torchvision.transforms as transforms 
 
 # Este script entrena un modelo con CIFAR10 y guarda un .pth incluyendo el model_dict con pesos
 # recibe nombre del modelo, numero de batches y epochs 
@@ -27,8 +28,9 @@ def main(args):
 
     # hyper params
     batch_size = args.batch_size
-    learning_rate = 1e-4
+    learning_rate = 5e-4 * batch_size / 512
     n_epochs = args.epochs
+    weight_decay = 0.05
     print(f"\nbatch_size {batch_size}\n"
         f"learning_rate: {learning_rate}\n"
         f"n_epochs:   {n_epochs}\n")
@@ -37,17 +39,47 @@ def main(args):
     model = utility.build_model(args.model)
 
     # dataloaders
-    trainloader = utility.build_dataloader_train(batch_size)
-    testloader = utility.build_dataloader_validation(batch_size)
+    trainloader = utility.build_dataloader_train_imagenet1k(batch_size, "/soft/datasets/imagenet/ILSVRC/Data/CLS-LOC")
+    testloader = utility.build_dataloader_validation_imagenet1k("/soft/datasets/imagenet/ILSVRC/Data/CLS-LOC")
+
+    # Transformaciones extras durante entrenamiento
+    mixup = transforms.MixUp(num_classes=1000, alpha=0.8)
+    cutmix = transforms.CutMix(num_classes=1000, alpha=1.0)
+    cutmix_or_mixup = transforms.RandomChoice([mixup, cutmix])
 
     # Loss function
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     # Optimizer function
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(
+        model.parameters(), 
+        lr=learning_rate,
+        betas=(0.9, 0.999),
+        weight_decay=weight_decay
+     )
 
-    # use cosine scheduling
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, n_epochs)
+    # Warmup scheduler
+    warmup_epochs = 5
+    warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=0.001,
+        end_factor=1.0,
+        total_iters=warmup_epochs
+    )
+
+    # Cosine scheduler
+    cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=n_epochs - warmup_epochs,
+        eta_min=1e-6
+    )
+
+    # use scheduler
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_epochs]
+    )
 
     model.to(device)
 
@@ -66,6 +98,7 @@ def main(args):
 
         for batch_idx, (inputs, targets) in enumerate(trainloader):
             inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = cutmix_or_mixup(inputs, targets)
 
             optimizer.zero_grad()
 
